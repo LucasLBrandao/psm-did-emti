@@ -223,8 +223,12 @@ lnC.color=COL.ctrl;lnC.width=2.2;lnT.color=COL.treat;lnT.width=2.2;
 lnCF.color=COL.cf;lnCF.width=2.2;lnCF.dash="7 5";brk.color=COL.cf;brk.width=2.4;
 
 /* event-study */
-const evPts=[],evBars=[];for(let i=0;i<5;i++){const p=mkCircle();p.color=COL.treat;evPts.push(p);
-  const b=mkLine();b.color=COL.treat;b.width=2;evBars.push(b);}
+const HCOL=["#3f7cba","#2f8f6b","#c7952b","#9b6ab8","#d96b55"];
+const ADOPT_YEARS=[2017,2018,2020],LAST_YEAR=2022;
+const EVENT_OBS=[];
+ADOPT_YEARS.forEach((adopt,cohort)=>{for(let year=adopt+1;year<=LAST_YEAR;year++)EVENT_OBS.push({cohort,adopt,year,h:year-adopt});});
+const evPts=[],evBars=[];for(let i=0;i<5;i++){const p=mkCircle();p.color=HCOL[i];evPts.push(p);
+  const b=mkLine();b.color=HCOL[i];b.width=2;evBars.push(b);}
 
 /* schools */
 const N=34;const schools=[];
@@ -275,22 +279,65 @@ const yrLbl=[];for(let i=0;i<5;i++)yrLbl.push(mkText(12,500,"middle"));
 const gap0=mkLine(),gap1=mkLine();
 const stagPre=[],stagPost=[],stagDot=[],lblCoh=[],dotLbl=[];
 const bridgeTreatDots=[],bridgeCtrlDots=[],bridgeLinks=[],bridgeGuides=[];
+const yearTicks=[],yearTickLbl=[],pointLbl=[];
+for(let i=0;i<=LAST_YEAR-2017;i++){
+  const tick=mkLine();tick.color=COL.axis;tick.width=1.2;yearTicks.push(tick);
+  yearTickLbl.push(mkText(12,500,"middle"));
+}
 for(let i=0;i<3;i++){
   const a=mkLine();a.color=COL.ctrl;a.width=6;stagPre.push(a);
   const b=mkLine();b.color=COL.treat;b.width=6;stagPost.push(b);
   const d=mkCircle();d.color=COL.cf;stagDot.push(d);
   lblCoh.push(mkText(13,700,"end"));
   dotLbl.push(mkText(12,600,"middle"));
+}
+for(let i=0;i<EVENT_OBS.length;i++){
   const bt=mkCircle();bt.color=COL.treat;bridgeTreatDots.push(bt);
   const bc=mkCircle();bc.color=COL.ctrl;bc.stroke="#fff";bc.sw=2;bridgeCtrlDots.push(bc);
   const bl=mkLine();bl.color="#b7b3a8";bl.width=1.4;bridgeLinks.push(bl);
   const bg=mkLine();bg.color="#d4d1c8";bg.width=1;bg.dash="4 5";bridgeGuides.push(bg);
+  pointLbl.push(mkText(11,700,"middle"));
 }
 
 /* ---------- helpers ---------- */
 function hideAll(){ALL.forEach(o=>{o.tar={};for(const k in o.cur)o.tar[k]=o.cur[k];o.tar.op=0;});}
 function show(o,props){for(const k in props)o.tar[k]=props[k];}
 function nearest(ps,pool){let best=null,bd=9;pool.forEach(p=>{const d=Math.abs(p.ps-ps);if(d<bd){bd=d;best=p;}});return best;}
+const calYear=year=>sx(year,2017,LAST_YEAR);
+const eventX=h=>470+(h-1)*145;
+const eventEff=[-3.2,-2.4,-1.6,-0.8,-0.2],eventCI=[1.5,1.3,1.2,1.2,1.4];
+function horizonLabel(h){return h===1?"+1 ano":"+"+h;}
+function showCalendarAxis(label){
+  show(axisX,{x1:calYear(2017),y1:PY1,x2:calYear(LAST_YEAR),y2:PY1,op:1});
+  for(let year=2017;year<=LAST_YEAR;year++){
+    const i=year-2017,x=calYear(year);
+    show(yearTicks[i],{x1:x,y1:PY1-6,x2:x,y2:PY1+6,op:1});
+    yearTickLbl[i].set(""+year);show(yearTickLbl[i],{x:x,y:PY1+20,op:1});yearTickLbl[i].fill=COL.muted;
+  }
+  xLabel.set(label);show(xLabel,{x:(calYear(2017)+calYear(LAST_YEAR))/2,y:PY1+42,op:1});
+}
+function layoutEventGroups(){
+  topMsg.set("primeiro: agrupamos os pontos da mesma cor");
+  show(topMsg,{x:655,y:PY0-8,op:1});topMsg.fill=COL.cf;
+  show(axisX,{x1:eventX(1)-42,y1:PY1,x2:eventX(5)+42,y2:PY1,op:.45});
+  xLabel.set("grupos por anos de implantação");
+  show(xLabel,{x:(eventX(1)+eventX(5))/2,y:PY1+42,op:1});
+  for(let h=1;h<=5;h++){
+    yrLbl[h-1].set(horizonLabel(h));
+    show(yrLbl[h-1],{x:eventX(h),y:PY1+20,op:1});yrLbl[h-1].fill=HCOL[h-1];
+  }
+  EVENT_OBS.forEach((obs,i)=>{
+    const same=EVENT_OBS.filter(o=>o.h===obs.h);
+    const pos=same.findIndex(o=>o===obs);
+    const x=eventX(obs.h)+(pos-(same.length-1)/2)*18;
+    const y=338+(obs.h%2)*28+(pos%2)*12;
+    bridgeTreatDots[i].color=HCOL[obs.h-1];
+    show(bridgeTreatDots[i],{x:x,y:y,r:7,op:1});
+    pointLbl[i].set(horizonLabel(obs.h));show(pointLbl[i],{x:x,y:y-17,op:.8});pointLbl[i].fill=HCOL[obs.h-1];
+  });
+  ann[0].set("cada grupo de cor vira uma estimativa média por horizonte");
+  show(ann[0],{x:655,y:520,op:1});ann[0].fill=COL.muted;
+}
 function matchedPairs(){
   const available=schools.filter(s=>!s.T);
   return schools
@@ -497,16 +544,14 @@ const layouts=[
 // 12 — staggered adoption (adoção escalonada)
 ()=>{
   const y0=[300,375,450],adopt=[2017,2018,2020],name=["Coorte 2017","Coorte 2018","Coorte 2020"];
-  const cal=y=>sx(y,2015,2023);
-  show(axisX,{x1:PX0,y1:PY1,x2:PX1,y2:PY1,op:1});
+  showCalendarAxis("ano de calendário");
   for(let i=0;i<3;i++){
-    show(stagPre[i],{x1:cal(2015),y1:y0[i],x2:cal(adopt[i]),y2:y0[i],op:1});
-    show(stagPost[i],{x1:cal(adopt[i]),y1:y0[i],x2:cal(2023),y2:y0[i],op:1});
-    show(stagDot[i],{x:cal(adopt[i]),y:y0[i],r:8,op:1});
-    lblCoh[i].set(name[i]);show(lblCoh[i],{x:cal(2015)-12,y:y0[i],op:1});lblCoh[i].fill=COL.ink;
-    dotLbl[i].set(""+adopt[i]);show(dotLbl[i],{x:cal(adopt[i]),y:y0[i]-16,op:1});dotLbl[i].fill=COL.cf;
+    show(stagPre[i],{x1:calYear(2017),y1:y0[i],x2:calYear(adopt[i]),y2:y0[i],op:1});
+    show(stagPost[i],{x1:calYear(adopt[i]),y1:y0[i],x2:calYear(LAST_YEAR),y2:y0[i],op:1});
+    show(stagDot[i],{x:calYear(adopt[i]),y:y0[i],r:8,op:1});
+    lblCoh[i].set(name[i]);show(lblCoh[i],{x:calYear(2017)-12,y:y0[i],op:1});lblCoh[i].fill=COL.ink;
+    dotLbl[i].set(""+adopt[i]);show(dotLbl[i],{x:calYear(adopt[i]),y:y0[i]-16,op:1});dotLbl[i].fill=COL.cf;
   }
-  xLabel.set("linha do tempo (ano de calendário)");show(xLabel,{x:(PX0+PX1)/2,y:PY1+30,op:1});
   topMsg.set("adoção escalonada: cada coorte adere num ano diferente");
   show(topMsg,{x:655,y:PY0-8,op:1});topMsg.fill=COL.cf;
   ann[0].set("cinza = antes do EMTI      azul = já com EMTI");
@@ -514,30 +559,31 @@ const layouts=[
 },
 // 13 — how each event-study point is assembled
 ()=>{
-  const y0=[295,375,455],adopt=[2017,2018,2020],name=["Coorte 2017","Coorte 2018","Coorte 2020"];
-  const cal=y=>sx(y,2015,2023),h=1;
-  show(axisX,{x1:PX0,y1:PY1,x2:PX1,y2:PY1,op:1});
+  const y0=[295,375,455],name=["Coorte 2017","Coorte 2018","Coorte 2020"];
+  showCalendarAxis("ano de calendário da análise");
   for(let i=0;i<3;i++){
-    const obs=adopt[i]+h,x=cal(obs);
-    show(stagPre[i],{x1:cal(2015),y1:y0[i],x2:cal(adopt[i]),y2:y0[i],op:.28});
-    show(stagPost[i],{x1:cal(adopt[i]),y1:y0[i],x2:cal(2023),y2:y0[i],op:.42});
-    show(stagDot[i],{x:cal(adopt[i]),y:y0[i],r:6,op:.55});
-    show(bridgeGuides[i],{x1:x,y1:PY0+26,x2:x,y2:PY1-22,op:.55});
-    show(bridgeTreatDots[i],{x:x,y:y0[i]-7,r:9,op:1});
-    show(bridgeCtrlDots[i],{x:x,y:y0[i]+28,r:7,op:1});
-    show(bridgeLinks[i],{x1:x,y1:y0[i]+4,x2:x,y2:y0[i]+21,op:.85});
-    lblCoh[i].set(name[i]);show(lblCoh[i],{x:cal(2015)-12,y:y0[i],op:1});lblCoh[i].fill=COL.ink;
-    dotLbl[i].set("+"+h+" ano");show(dotLbl[i],{x:x,y:y0[i]-28,op:1});dotLbl[i].fill=COL.cf;
+    const adopt=ADOPT_YEARS[i];
+    show(stagPre[i],{x1:calYear(2017),y1:y0[i],x2:calYear(adopt),y2:y0[i],op:.2});
+    show(stagPost[i],{x1:calYear(adopt),y1:y0[i],x2:calYear(LAST_YEAR),y2:y0[i],op:.32});
+    show(stagDot[i],{x:calYear(adopt),y:y0[i],r:6,op:.55});
+    lblCoh[i].set(name[i]);show(lblCoh[i],{x:calYear(2017)-12,y:y0[i],op:1});lblCoh[i].fill=COL.ink;
   }
-  xLabel.set("ano de calendário usado dentro de cada comparação");
-  show(xLabel,{x:(PX0+PX1)/2,y:PY1+30,op:1});
-  topMsg.set("um ponto do gráfico seguinte junta comparações equivalentes");
+  EVENT_OBS.forEach((obs,i)=>{
+    const x=calYear(obs.year),y=y0[obs.cohort],col=HCOL[obs.h-1];
+    bridgeTreatDots[i].color=col;
+    show(bridgeGuides[i],{x1:x,y1:PY0+35,x2:x,y2:PY1-18,op:.22});
+    show(bridgeTreatDots[i],{x:x,y:y-8,r:8,op:1});
+    show(bridgeCtrlDots[i],{x:x,y:y+24,r:6,op:.9});
+    show(bridgeLinks[i],{x1:x,y1:y+1,x2:x,y2:y+17,op:.72});
+    pointLbl[i].set(horizonLabel(obs.h));show(pointLbl[i],{x:x,y:y-27,op:1});pointLbl[i].fill=col;
+  });
+  topMsg.set("cada ponto colorido é uma análise coorte-ano");
   show(topMsg,{x:655,y:PY0-8,op:1});topMsg.fill=COL.cf;
-  ann[0].set("azul: coorte observada no mesmo tempo desde a adesão");
-  show(ann[0],{x:705,y:520,op:1});ann[0].fill=COL.treat;
+  ann[0].set("cores = grupos de anos de implantação");
+  show(ann[0],{x:705,y:520,op:1});ann[0].fill=COL.muted;
   ann[1].set("cinza: comparação com escolas ainda sem EMTI naquele ano");
   show(ann[1],{x:708,y:545,op:1});ann[1].fill=COL.muted;
-  ann[2].set("repete-se para +2, +3... e os efeitos são alinhados por exposição");
+  ann[2].set("o label acima indica o tempo desde a adesão");
   show(ann[2],{x:705,y:570,op:1});ann[2].fill=COL.cf;
 },
 // 14 — event study: effect by exposure horizon
@@ -547,14 +593,20 @@ const layouts=[
   show(axisY,{x1:PX0,y1:PY0,x2:PX0,y2:PY1,op:1});
   refLine.color="#bdbbb4";refLine.dash="5 5";
   show(refLine,{x1:PX0,y1:y0,x2:PX1,y2:y0,op:1});
-  const eff=[-3.2,-2.4,-1.6,-0.8,-0.2],ci=[1.5,1.3,1.2,1.2,1.4];
-  for(let i=0;i<5;i++){const x=470+i*145,y=y0-eff[i]*scaleY;
+  EVENT_OBS.forEach((obs,i)=>{
+    const same=EVENT_OBS.filter(o=>o.h===obs.h);
+    const pos=same.findIndex(o=>o===obs);
+    const x=eventX(obs.h)+(pos-(same.length-1)/2)*12,y=y0-eventEff[obs.h-1]*scaleY+(pos-(same.length-1)/2)*6;
+    bridgeTreatDots[i].color=HCOL[obs.h-1];
+    show(bridgeTreatDots[i],{x:x,y:y,r:4.5,op:.35});
+  });
+  for(let i=0;i<5;i++){const x=eventX(i+1),y=y0-eventEff[i]*scaleY;
     show(evPts[i],{x:x,y:y,r:8,op:1});
-    show(evBars[i],{x1:x,y1:y-ci[i]*scaleY,x2:x,y2:y+ci[i]*scaleY,op:.9});
-    yrLbl[i].set(""+(i+1));show(yrLbl[i],{x:x,y:PY1+16,op:1});yrLbl[i].fill=COL.muted;}
-  xLabel.set("anos desde a adesão ao EMTI");show(xLabel,{x:(470+1050)/2,y:PY1+38,op:1});
+    show(evBars[i],{x1:x,y1:y-eventCI[i]*scaleY,x2:x,y2:y+eventCI[i]*scaleY,op:.9});
+    yrLbl[i].set(""+(i+1));show(yrLbl[i],{x:x,y:PY1+16,op:1});yrLbl[i].fill=HCOL[i];}
+  xLabel.set("anos desde a adesão ao EMTI");show(xLabel,{x:(eventX(1)+eventX(5))/2,y:PY1+38,op:1});
   yLabel.set("efeito estimado no abandono (p.p.)");show(yLabel,{x:Y_LABEL_X,y:Y_LABEL_Y,op:1});
-  topMsg.set("cada ponto = uma estimativa de DiD por horizonte de exposição");
+  topMsg.set("cada ponto maior = efeito médio do grupo de mesma cor");
   show(topMsg,{x:655,y:PY0-8,op:1});topMsg.fill=COL.cf;
   ann[0].set("faixa cruza o zero → efeito não distinguível");
   show(ann[0],{x:905,y:y0-72,op:1});ann[0].fill=COL.muted;
@@ -631,11 +683,11 @@ const META=[
   "Na prática, as escolas não aderiram todas no mesmo ano — e, dentro de cada escola, o integral avança série a série.",
   "<span class='term'>Adoção escalonada</span>: coortes entram em 2017, 2018, 2020… Cada coorte tem seu próprio 'antes' (cinza) e 'depois' (azul) e funciona como um DiD. Com muitas coortes, combinam-se todas para estimar o efeito e sua evolução."],
  ["Como nasce cada ponto",
-  "Para um mesmo horizonte de exposição, juntamos observações comparáveis de várias coortes.",
-  "Exemplo: o ponto de <b>+1 ano</b> reúne coortes observadas um ano após aderirem. Cada observação tratada é comparada com escolas ainda sem EMTI naquele mesmo ano de calendário; depois repetimos a lógica para +2, +3 e assim por diante."],
+  "Cada ponto colorido é uma análise coorte-ano; a cor indica há quantos anos aquela coorte estava no EMTI.",
+  "O eixo mantém a escala de 2017 a 2022. Em cada coorte-data, o ponto colorido representa a coorte tratada naquele horizonte de implantação e o ponto cinza indica o grupo de comparação usado para construir o contrafactual."],
  ["Efeito por tempo de exposição (event study)",
-  "Alinhamos cada coorte pelo seu ano de adesão e estimamos um efeito para cada horizonte de exposição.",
-  "Cada ponto é uma estimativa de <span class='term'>DiD</span> para 'X anos de programa', ante escolas ainda sem EMTI. A <b>faixa</b> é o intervalo de confiança: quando cruza o zero, o efeito não é distinguível. (Sob adoção escalonada, o TWFE simples pode viesar — daí estimadores modernos.)"],
+  "Agrupamos os pontos de mesma cor e estimamos o efeito médio por tempo de exposição.",
+  "Cada ponto maior sintetiza estimativas de <span class='term'>DiD</span> para 'X anos de programa', ante escolas ainda sem EMTI. A <b>faixa</b> é o intervalo de confiança: quando cruza o zero, o efeito não é distinguível. (Sob adoção escalonada, o TWFE simples pode viesar — daí estimadores modernos.)"],
  ["Dois métodos complementares",
   "PSM e DiD cobrem fraquezas um do outro — e foram aplicados nas duas unidades: escola e aluno.",
   "PSM torna os grupos comparáveis nas variáveis <b>medidas</b>; DiD limpa diferenças fixas <b>não medidas</b> usando a variação temporal. Juntos, dão a leitura mais robusta do impacto."]
@@ -666,7 +718,14 @@ function chrome(i){
 
 async function goTo(i){
   if(i<0||i>=total)return;
+  const prev=cur;
   cur=i;animGen++;const gen=animGen;
+  if(prev===13&&i===14){
+    hideAll();layoutEventGroups();
+    chrome(i);
+    const ok=await commit(560,gen);
+    if(!ok)return;
+  }
   hideAll();layouts[i]();
   chrome(i);
   await commit(720,gen);
