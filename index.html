@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSM e DiD explicados com o EMTI</title>
+<style>
+  :root{
+    --bg:#f7f6f3; --ink:#2b2b2b; --muted:#6b6b6b;
+    --ctrl:#9aa3ab; --treat:#2f6f7e; --cf:#d98a2b; --axis:#cfcdc6;
+    --panel:#ffffffee;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;}
+  #app{display:flex;align-items:center;justify-content:center;height:100vh;}
+  #stage{position:relative;width:min(100vw,177.78vh);height:min(56.25vw,100vh);
+    overflow:hidden;background:var(--bg);}
+  svg{position:absolute;inset:0;width:100%;height:100%;}
+
+  /* chrome */
+  #titlebar{position:absolute;left:4.2%;top:4.5%;right:22%;pointer-events:none;}
+  #title{font-size:clamp(18px,2.5vw,30px);font-weight:700;letter-spacing:.2px;margin:0;}
+  #subtitle{font-size:clamp(12px,1.35vw,16px);font-weight:400;color:var(--muted);
+    margin:.35em 0 0;line-height:1.35;max-width:46ch;}
+  #note{position:absolute;left:4.2%;bottom:4.2%;max-width:40ch;
+    font-size:clamp(10px,1.05vw,13px);line-height:1.45;color:#4a4a4a;
+    background:var(--panel);border-left:3px solid var(--treat);
+    padding:.6em .8em;border-radius:4px;box-shadow:0 1px 6px #0000000f;
+    pointer-events:none;}
+  #note b{color:var(--treat)}
+  #note .term{color:var(--cf);font-weight:600}
+
+  #nav{position:absolute;right:3%;bottom:4.2%;display:flex;align-items:center;
+    gap:.5em;font-size:13px;color:var(--muted);}
+  #nav button{font:inherit;cursor:pointer;border:1px solid #d3d1ca;background:#fff;
+    color:var(--ink);width:34px;height:30px;border-radius:6px;line-height:1;}
+  #nav button:hover{background:#f0efe9}
+  #counter{min-width:52px;text-align:center;font-variant-numeric:tabular-nums;}
+
+  /* DiD 2x2 table */
+  #ditab{position:absolute;right:2.5%;top:6%;width:250px;background:var(--panel);
+    border:1px solid #e3e1da;border-radius:10px;padding:11px 13px;
+    box-shadow:0 2px 12px #00000012;font-size:12.5px;color:#3a3a3a;
+    opacity:0;transform:translateY(-6px);transition:.35s;pointer-events:none;}
+  #ditab.on{opacity:1;transform:none;}
+  #ditab .tt{font-weight:600;color:var(--treat);margin-bottom:.5em;font-size:12px;}
+  #ditab table{width:100%;border-collapse:collapse;text-align:center;}
+  #ditab th{color:var(--muted);font-weight:600;padding:2px 4px;border-bottom:1px solid #e3e1da;}
+  #ditab td{padding:3px 4px;font-variant-numeric:tabular-nums;}
+  #ditab td.g{color:var(--ctrl);text-align:left;font-weight:600;}
+  #ditab td.t{color:var(--treat);text-align:left;font-weight:600;}
+  #ditab td.d{color:var(--cf);font-weight:600;}
+  #ditab .res{margin-top:.6em;padding-top:.5em;border-top:1px solid #e3e1da;text-align:center;}
+  #ditab .res b{color:var(--cf);}
+
+  /* fog overlay for unobservables */
+  #fog{position:absolute;inset:0;pointer-events:none;opacity:0;transition:.6s;
+    background:radial-gradient(120% 90% at 50% 60%,#8a8f9600 40%,#8a8f9636 100%);}
+  #fog.on{opacity:1;}
+  #fog span{position:absolute;left:50%;top:16%;transform:translateX(-50%);
+    font-size:12px;color:#6b6b6b;background:#ffffffcc;padding:3px 9px;border-radius:20px;}
+
+  .legend{position:absolute;right:3%;top:6%;font-size:12px;color:#555;
+    background:#ffffffdd;border-radius:6px;padding:7px 11px;line-height:1.85;
+    opacity:0;transition:.4s;pointer-events:none;z-index:6;
+    box-shadow:0 1px 6px #0000000f;}
+  .legend.axis-side{left:4.2%;right:auto;top:31%;}
+  .legend.on{opacity:1;}
+  .lg-row{white-space:nowrap;}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;
+    margin-right:6px;vertical-align:middle;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <svg id="svg" viewBox="0 0 1300 720" preserveAspectRatio="xMidYMid meet"></svg>
+
+    <div class="legend" id="legend">
+      <div class="lg-row" id="lgT"><span class="dot" style="background:var(--treat)"></span>Tratamento — escolas EMTI</div>
+      <div class="lg-row" id="lgC"><span class="dot" style="background:var(--ctrl)"></span>Controle — escolas sem EMTI</div>
+      <div class="lg-row" id="lgCF"><span class="dot" style="background:var(--cf)"></span>Contrafactual / hipotético</div>
+    </div>
+
+    <div id="titlebar">
+      <h1 id="title"></h1>
+      <p id="subtitle"></p>
+    </div>
+
+    <div id="note"></div>
+
+    <div id="ditab">
+      <div class="tt">A conta do DiD — taxa de abandono (%)</div>
+      <table>
+        <tr><th></th><th>Antes</th><th>Depois</th><th>Δ</th></tr>
+        <tr><td class="g">Controle</td><td>6,0</td><td>9,0</td><td class="d">+3,0</td></tr>
+        <tr><td class="t">EMTI</td><td>8,0</td><td>12,5</td><td class="d">+4,5</td></tr>
+      </table>
+      <div class="res">DiD = (+4,5) − (+3,0) = <b>+1,5 p.p.</b></div>
+    </div>
+
+    <div id="fog"><span>variáveis não observáveis — fora do alcance do PSM</span></div>
+
+    <div id="nav">
+      <button id="prev" aria-label="anterior">◀</button>
+      <span id="counter">1 / 13</span>
+      <button id="next" aria-label="próximo">▶</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SVGNS="http://www.w3.org/2000/svg";
+const svg=document.getElementById("svg");
+const gRoot=document.createElementNS(SVGNS,"g"); svg.appendChild(gRoot);
+
+const COL={treat:"#2f6f7e",ctrl:"#9aa3ab",cf:"#d98a2b",axis:"#cfcdc6",ink:"#2b2b2b",muted:"#6b6b6b"};
+
+/* ---------- plot geometry ---------- */
+const PX0=250,PX1=1060,PY0=175,PY1=585;
+const xAnte=430,xPost=800;
+const yD=v=>PY1-(v/16)*(PY1-PY0);           // DiD abandono domain 0..16 (%)
+const sx=(v,a,b)=>PX0+((v-a)/(b-a))*(PX1-PX0);
+const sy=(v,a,b)=>PY1-((v-a)/(b-a))*(PY1-PY0);
+// compressed mapping for the covariate cloud (points sit closer together, central band)
+const cxN=v=>sx(v,-0.35,1.35);
+const cyF=v=>sy(v,-0.30,1.30);
+
+/* ---------- animation engine ---------- */
+const ALL=[]; let animGen=0;
+const lerp=(a,b,t)=>a+(b-a)*t;
+function commit(dur,gen){
+  ALL.forEach(o=>{o.from={};for(const k in o.tar)o.from[k]=o.cur[k];});
+  return new Promise(res=>{
+    const t0=performance.now();
+    function frame(now){
+      if(gen!==animGen)return res(false);
+      const t=Math.min(1,(now-t0)/dur);
+      const e=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+      ALL.forEach(o=>{for(const k in o.tar)o.cur[k]=lerp(o.from[k],o.tar[k],e);o.render();});
+      t<1?requestAnimationFrame(frame):res(true);
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+/* ---------- object factories ---------- */
+function mkCircle(){
+  const el=document.createElementNS(SVGNS,"circle");gRoot.appendChild(el);
+  const o={el,color:COL.ctrl,stroke:"none",sw:0,dash:"",
+    cur:{x:650,y:360,r:0,op:0},tar:{x:650,y:360,r:0,op:0},from:{},
+    render(){el.setAttribute("cx",this.cur.x);el.setAttribute("cy",this.cur.y);
+      el.setAttribute("r",Math.max(0,this.cur.r));el.setAttribute("fill",this.color);
+      el.setAttribute("opacity",this.cur.op);el.setAttribute("stroke",this.stroke);
+      el.setAttribute("stroke-width",this.sw);if(this.dash)el.setAttribute("stroke-dasharray",this.dash);
+      else el.removeAttribute("stroke-dasharray");}};
+  ALL.push(o);return o;
+}
+function mkLine(){
+  const el=document.createElementNS(SVGNS,"line");gRoot.appendChild(el);
+  const o={el,color:COL.axis,width:1.4,dash:"",
+    cur:{x1:0,y1:0,x2:0,y2:0,op:0},tar:{x1:0,y1:0,x2:0,y2:0,op:0},from:{},
+    render(){el.setAttribute("x1",this.cur.x1);el.setAttribute("y1",this.cur.y1);
+      el.setAttribute("x2",this.cur.x2);el.setAttribute("y2",this.cur.y2);
+      el.setAttribute("stroke",this.color);el.setAttribute("stroke-width",this.width);
+      el.setAttribute("opacity",this.cur.op);
+      if(this.dash)el.setAttribute("stroke-dasharray",this.dash);else el.removeAttribute("stroke-dasharray");}};
+  ALL.push(o);return o;
+}
+function mkText(size,weight,anchor){
+  const el=document.createElementNS(SVGNS,"text");gRoot.appendChild(el);
+  el.setAttribute("font-family","system-ui,-apple-system,Segoe UI,Roboto,sans-serif");
+  el.setAttribute("font-size",size);el.setAttribute("font-weight",weight);
+  el.setAttribute("text-anchor",anchor);el.setAttribute("dominant-baseline","middle");
+  const o={el,txt:"",fill:"#3a3a3a",
+    cur:{x:0,y:0,op:0},tar:{x:0,y:0,op:0},from:{},
+    set(s){this.txt=s;},
+    render(){el.textContent=this.txt;el.setAttribute("x",this.cur.x);el.setAttribute("y",this.cur.y);
+      el.setAttribute("fill",this.fill);el.setAttribute("opacity",this.cur.op);}};
+  ALL.push(o);return o;
+}
+function mkPath(){
+  const el=document.createElementNS(SVGNS,"path");gRoot.appendChild(el);
+  el.setAttribute("fill","none");
+  const o={el,color:COL.axis,width:1.5,dash:"",d:"",
+    cur:{op:0},tar:{op:0},from:{},
+    render(){el.setAttribute("d",this.d);el.setAttribute("stroke",this.color);
+      el.setAttribute("stroke-width",this.width);el.setAttribute("opacity",this.cur.op);
+      if(this.dash)el.setAttribute("stroke-dasharray",this.dash);else el.removeAttribute("stroke-dasharray");}};
+  ALL.push(o);return o;
+}
+
+/* ---------- static structural objects (created first, drawn behind) ---------- */
+const axisX=mkLine(),axisY=mkLine(),refLine=mkLine();
+axisX.color=COL.axis;axisY.color=COL.axis;refLine.color="#bdbbb4";refLine.dash="5 5";
+const logistic=mkPath();logistic.color="#c9bfa9";logistic.width=2;logistic.dash="6 5";
+// build logistic d
+(function(){let d="";for(let i=0;i<=60;i++){const u=i/60;const x=PX0+u*(PX1-PX0);
+  const val=1/(1+Math.exp(-9*(u-0.5)));const y=470-val*160;d+=(i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1)+" ";}
+  logistic.d=d;})();
+
+/* hinged axis: interpolates an ANGLE so the y-axis can fold down onto the x-axis */
+const AX=512;                                  // shared baseline for the covariate plane / ruler
+const foldAxis=(function(){
+  const el=document.createElementNS(SVGNS,"line");gRoot.appendChild(el);
+  const o={el,color:COL.axis,width:1.6,pivotX:PX0,pivotY:AX,len:AX-PY0,
+    cur:{ang:0,op:0},tar:{ang:0,op:0},from:{},
+    render(){const a=this.cur.ang;
+      el.setAttribute("x1",this.pivotX);el.setAttribute("y1",this.pivotY);
+      el.setAttribute("x2",this.pivotX+this.len*Math.sin(a));
+      el.setAttribute("y2",this.pivotY-this.len*Math.cos(a));
+      el.setAttribute("stroke",this.color);el.setAttribute("stroke-width",this.width);
+      el.setAttribute("opacity",this.cur.op);}};
+  ALL.push(o);return o;
+})();
+
+/* DiD markers + trend lines */
+const mC0=mkCircle(),mC1=mkCircle(),mT0=mkCircle(),mT1=mkCircle(),mCF=mkCircle();
+mC0.color=mC1.color=COL.ctrl;mT0.color=mT1.color=COL.treat;mCF.color=COL.cf;
+const lnC=mkLine(),lnT=mkLine(),lnCF=mkLine(),brk=mkLine();
+lnC.color=COL.ctrl;lnC.width=2.2;lnT.color=COL.treat;lnT.width=2.2;
+lnCF.color=COL.cf;lnCF.width=2.2;lnCF.dash="7 5";brk.color=COL.cf;brk.width=2.4;
+
+/* event-study */
+const evPts=[],evBars=[];for(let i=0;i<5;i++){const p=mkCircle();p.color=COL.treat;evPts.push(p);
+  const b=mkLine();b.color=COL.treat;b.width=2;evBars.push(b);}
+
+/* schools */
+const N=34;const schools=[];
+(function(){let s=20240705;const rnd=()=>{s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff;};
+  for(let i=0;i<N;i++){
+    const T=i<17;
+    const nse=T?0.40+rnd()*0.45:0.20+rnd()*0.50;     // treatment tends higher NSE, with overlap
+    const fem=0.28+rnd()*0.5;
+    const ps=1/(1+Math.exp(-(2.3*(nse-0.5)+0.7*(fem-0.5))));
+    const ab=Math.max(0.02,0.15-0.13*nse+(rnd()-0.5)*0.03); // abandono rate (illustrative)
+    const c=mkCircle();c.color=T?COL.treat:COL.ctrl;
+    schools.push({o:c,T,nse,fem,ps,ab,jx:(rnd()-0.5)*46,jy:(rnd()-0.5)*46});
+  }})();
+
+/* matching lines pool */
+const matchLines=[];for(let i=0;i<9;i++){const l=mkLine();l.color="#b7b3a8";l.width=1.3;matchLines.push(l);}
+
+/* intro ghosts */
+const focus=mkCircle(),ghostT=mkCircle(),ghostC=mkCircle();
+focus.color="#7d8791";ghostT.color=COL.treat;ghostC.color=COL.cf;ghostC.dash="4 3";ghostC.stroke=COL.cf;
+
+/* text slots */
+const xLabel=mkText(15,600,"middle");xLabel.fill=COL.muted;
+/* y-axis title: rotated -90°, running along the y-axis, left of it */
+const Y_LABEL_X=PX0-46,Y_LABEL_Y=(PY0+PY1)/2;
+const yLabel=(function(){
+  const el=document.createElementNS(SVGNS,"text");gRoot.appendChild(el);
+  el.setAttribute("font-family","system-ui,-apple-system,Segoe UI,Roboto,sans-serif");
+  el.setAttribute("font-size",15);el.setAttribute("font-weight",600);
+  el.setAttribute("text-anchor","middle");el.setAttribute("dominant-baseline","middle");
+  const o={el,txt:"",fill:COL.muted,
+    cur:{x:Y_LABEL_X,y:Y_LABEL_Y,op:0},tar:{x:Y_LABEL_X,y:Y_LABEL_Y,op:0},from:{},
+    set(s){this.txt=s;},
+    render(){el.textContent=this.txt;el.setAttribute("x",this.cur.x);el.setAttribute("y",this.cur.y);
+      el.setAttribute("transform","rotate(-90 "+this.cur.x+" "+this.cur.y+")");
+      el.setAttribute("fill",this.fill);el.setAttribute("opacity",this.cur.op);}};
+  ALL.push(o);return o;
+})();
+const capA=mkText(14,500,"middle"),capB=mkText(14,500,"middle"),
+      capC=mkText(14,600,"middle"),capD=mkText(14,500,"middle");
+capC.fill=COL.cf;
+
+/* extra text + DiD/staggered objects */
+const topMsg=mkText(15,600,"middle");
+const lblT=mkText(13,700,"start"),lblC=mkText(13,700,"start");
+const ann=[mkText(13,500,"middle"),mkText(13,500,"middle"),mkText(13,500,"middle")];
+const yrLbl=[];for(let i=0;i<5;i++)yrLbl.push(mkText(12,500,"middle"));
+const gap0=mkLine(),gap1=mkLine();
+const stagPre=[],stagPost=[],stagDot=[],lblCoh=[],dotLbl=[];
+const bridgeTreatDots=[],bridgeCtrlDots=[],bridgeLinks=[],bridgeGuides=[];
+for(let i=0;i<3;i++){
+  const a=mkLine();a.color=COL.ctrl;a.width=6;stagPre.push(a);
+  const b=mkLine();b.color=COL.treat;b.width=6;stagPost.push(b);
+  const d=mkCircle();d.color=COL.cf;stagDot.push(d);
+  lblCoh.push(mkText(13,700,"end"));
+  dotLbl.push(mkText(12,600,"middle"));
+  const bt=mkCircle();bt.color=COL.treat;bridgeTreatDots.push(bt);
+  const bc=mkCircle();bc.color=COL.ctrl;bc.stroke="#fff";bc.sw=2;bridgeCtrlDots.push(bc);
+  const bl=mkLine();bl.color="#b7b3a8";bl.width=1.4;bridgeLinks.push(bl);
+  const bg=mkLine();bg.color="#d4d1c8";bg.width=1;bg.dash="4 5";bridgeGuides.push(bg);
+}
+
+/* ---------- helpers ---------- */
+function hideAll(){ALL.forEach(o=>{o.tar={};for(const k in o.cur)o.tar[k]=o.cur[k];o.tar.op=0;});}
+function show(o,props){for(const k in props)o.tar[k]=props[k];}
+function nearest(ps,pool){let best=null,bd=9;pool.forEach(p=>{const d=Math.abs(p.ps-ps);if(d<bd){bd=d;best=p;}});return best;}
+function matchedPairs(){
+  const available=schools.filter(s=>!s.T);
+  return schools
+    .filter(s=>s.T&&s.ps>0.18&&s.ps<0.86)
+    .slice(0,8)
+    .map(t=>{
+      const c=nearest(t.ps,available);
+      available.splice(available.indexOf(c),1);
+      return {t,c};
+    });
+}
+
+/* DiD numeric scene (illustrative values; visible initial gap = selection) */
+const aC0=6,aC1=9,aT0=8,aT1=12.5,slopeC=aC1-aC0;
+function T1cf(){return aT0+slopeC;}
+function placeDiD(withCF,withBrk){
+  show(axisX,{x1:PX0,y1:PY1,x2:PX1,y2:PY1,op:1});
+  show(axisY,{x1:PX0,y1:PY0,x2:PX0,y2:PY1,op:1});
+  show(mC0,{x:xAnte,y:yD(aC0),r:11,op:1});
+  show(mT0,{x:xAnte,y:yD(aT0),r:11,op:1});
+  show(mC1,{x:xPost,y:yD(aC1),r:11,op:1});
+  show(mT1,{x:xPost,y:yD(aT1),r:11,op:1});
+  show(lnC,{x1:xAnte,y1:yD(aC0),x2:xPost,y2:yD(aC1),op:1});
+  show(lnT,{x1:xAnte,y1:yD(aT0),x2:xPost,y2:yD(aT1),op:1});
+  yLabel.set("taxa de abandono (%)");show(yLabel,{x:Y_LABEL_X,y:Y_LABEL_Y,op:1});
+  xLabel.set("tempo");show(xLabel,{x:(xAnte+xPost)/2,y:PY1+34,op:1});
+  capA.set("antes");show(capA,{x:xAnte,y:PY1+20,op:1});
+  capB.set("depois");show(capB,{x:xPost,y:PY1+20,op:1});
+  if(withCF){
+    show(mCF,{x:xPost,y:yD(T1cf()),r:11,op:1});
+    show(lnCF,{x1:xAnte,y1:yD(aT0),x2:xPost,y2:yD(T1cf()),op:1});
+  }
+  if(withBrk){
+    show(brk,{x1:xPost+26,y1:yD(aT1),x2:xPost+26,y2:yD(T1cf()),op:1});
+    capC.set("efeito = observado − contrafactual");
+    show(capC,{x:xPost+34,y:(yD(aT1)+yD(T1cf()))/2,op:1});
+  }
+}
+/* reusable four-point DiD scene (points + trend lines + group labels) */
+function baseDiD(){
+  show(axisX,{x1:PX0,y1:PY1,x2:PX1,y2:PY1,op:1});
+  show(axisY,{x1:PX0,y1:PY0,x2:PX0,y2:PY1,op:1});
+  show(mC0,{x:xAnte,y:yD(aC0),r:11,op:1});show(mT0,{x:xAnte,y:yD(aT0),r:11,op:1});
+  show(mC1,{x:xPost,y:yD(aC1),r:11,op:1});show(mT1,{x:xPost,y:yD(aT1),r:11,op:1});
+  show(lnC,{x1:xAnte,y1:yD(aC0),x2:xPost,y2:yD(aC1),op:1});
+  show(lnT,{x1:xAnte,y1:yD(aT0),x2:xPost,y2:yD(aT1),op:1});
+  yLabel.set("taxa de abandono (%)");show(yLabel,{x:Y_LABEL_X,y:Y_LABEL_Y,op:1});
+  xLabel.set("tempo");show(xLabel,{x:(xAnte+xPost)/2,y:PY1+34,op:1});
+  capA.set("antes");show(capA,{x:xAnte,y:PY1+20,op:1});capA.fill=COL.muted;
+  capB.set("depois");show(capB,{x:xPost,y:PY1+20,op:1});capB.fill=COL.muted;
+  lblC.set("controle");show(lblC,{x:xPost+16,y:yD(aC1),op:1});lblC.fill=COL.muted;
+  lblT.set("EMTI");show(lblT,{x:xPost+16,y:yD(aT1),op:1});lblT.fill=COL.treat;
+}
+/* ---------- slide layouts (0-indexed) ---------- */
+const layouts=[
+// 0 — title / counterfactual
+()=>{
+  show(focus,{x:650,y:400,r:34,op:1});
+  show(ghostT,{x:520,y:400,r:26,op:.5});
+  show(ghostC,{x:780,y:400,r:26,op:.35});ghostC.sw=2;
+  // X over ghostC
+  show(matchLines[6],{x1:762,y1:382,x2:798,y2:418,op:1});matchLines[6].color=COL.cf;matchLines[6].width=2.4;
+  show(matchLines[7],{x1:798,y1:382,x2:762,y2:418,op:1});matchLines[7].color=COL.cf;matchLines[7].width=2.4;
+  capA.set("mundo com EMTI");show(capA,{x:520,y:456,op:1});capA.fill=COL.treat;
+  capB.set("mundo sem EMTI — nunca observado");show(capB,{x:780,y:456,op:1});capB.fill=COL.cf;
+  capD.set("uma mesma escola, dois desfechos possíveis");show(capD,{x:650,y:470,op:1});capD.fill=COL.muted;
+},
+// 1 — naive comparison / selection bias
+()=>{
+  schools.forEach(s=>{const cx=s.T?820:490;const cy=sy(s.nse,0,1);
+    show(s.o,{x:cx+s.jx*0.7,y:cy+s.jy*0.5,r:9,op:1});});
+  show(axisY,{x1:PX0,y1:PY0,x2:PX0,y2:PY1,op:1});
+  yLabel.set("NSE / condições prévias");show(yLabel,{x:Y_LABEL_X,y:Y_LABEL_Y,op:1});
+  capA.set("controle");show(capA,{x:490,y:PY1+22,op:1});capA.fill=COL.muted;
+  capB.set("tratamento (EMTI)");show(capB,{x:820,y:PY1+22,op:1});capB.fill=COL.treat;
+  capC.set("já eram diferentes ANTES do programa");show(capC,{x:655,y:PY0-8,op:1});capC.fill=COL.cf;
+},
+// 2 — schools as covariate vectors
+()=>{
+  schools.forEach(s=>{show(s.o,{x:cxN(s.nse),y:cyF(s.fem),r:9,op:1});});
+  show(axisX,{x1:PX0,y1:AX,x2:PX1,y2:AX,op:1});
+  show(foldAxis,{ang:0,op:1});                       // vertical y-axis (will fold later)
+  xLabel.set("nível socioeconômico (NSE)");show(xLabel,{x:(PX0+PX1)/2,y:AX+30,op:1});
+  yLabel.set("% de meninas");show(yLabel,{x:Y_LABEL_X,y:Y_LABEL_Y,op:1});
+  capA.set("cada escola = um vetor de características (NSE, sexo, raça, gestão, docentes…)");
+  show(capA,{x:655,y:PY0-14,op:1});capA.fill=COL.muted;
+},
+// 3 — find a twin
+()=>{
+  const tSel=schools.find(s=>s.T&&s.ps>0.5&&s.ps<0.7)||schools[3];
+  const cSel=nearest(tSel.ps,schools.filter(s=>!s.T));
+  schools.forEach(s=>{const hi=(s===tSel||s===cSel);
+    show(s.o,{x:cxN(s.nse),y:cyF(s.fem),r:hi?12:8,op:hi?1:.28});});
+  show(axisX,{x1:PX0,y1:AX,x2:PX1,y2:AX,op:1});
+  show(foldAxis,{ang:0,op:1});                       // vertical y-axis, ready to fold
+  xLabel.set("nível socioeconômico (NSE)");show(xLabel,{x:(PX0+PX1)/2,y:AX+30,op:1});
+  yLabel.set("% de meninas");show(yLabel,{x:Y_LABEL_X,y:Y_LABEL_Y,op:1});
+  show(matchLines[0],{x1:cxN(tSel.nse),y1:cyF(tSel.fem),
+    x2:cxN(cSel.nse),y2:cyF(cSel.fem),op:1});matchLines[0].color=COL.cf;matchLines[0].width=2;
+  capC.set("para cada escola EMTI, um par de controle parecido");
+  show(capC,{x:655,y:PY0-14,op:1});capC.fill=COL.cf;
+},
+// 4 — propensity score ruler (collapse dimensions)
+()=>{
+  const yT=310,yC=452;
+  schools.forEach(s=>{show(s.o,{x:sx(s.ps,0,1),y:s.T?yT:yC,r:9,op:1});});
+  show(logistic,{op:1});
+  show(foldAxis,{ang:Math.PI/2,op:1});               // y-axis folds down onto the x-axis
+  show(axisX,{x1:PX0,y1:AX,x2:PX1,y2:AX,op:1});
+  xLabel.set("escore de propensão  P(EMTI | características) ∈ [0, 1]");
+  show(xLabel,{x:(PX0+PX1)/2,y:AX+30,op:1});
+  capA.set("tratamento");show(capA,{x:PX0-2,y:yT,op:1});capA.fill=COL.treat;
+  capB.set("controle");show(capB,{x:PX0-2,y:yC,op:1});capB.fill=COL.muted;
+  capC.set("muitas dimensões  →  um único número");show(capC,{x:655,y:PY0-6,op:1});capC.fill=COL.cf;
+},
+// 5 — match on the score + common support
+()=>{
+  const yT=310,yC=452;
+  schools.forEach(s=>{const supp=s.ps>0.18&&s.ps<0.86;
+    show(s.o,{x:sx(s.ps,0,1),y:s.T?yT:yC,r:9,op:supp?1:.2});});
+  // draw up to 8 matching lines for representative treated
+  matchedPairs().forEach(({t,c},i)=>{
+    show(matchLines[i],{x1:sx(t.ps,0,1),y1:yT+9,x2:sx(c.ps,0,1),y2:yC-9,op:.9});
+    matchLines[i].color="#b7b3a8";matchLines[i].width=1.4;});
+  show(axisX,{x1:PX0,y1:AX,x2:PX1,y2:AX,op:1});
+  xLabel.set("escore de propensão");show(xLabel,{x:(PX0+PX1)/2,y:AX+30,op:1});
+  capC.set("suporte comum: só comparamos onde há tratados E controles");
+  show(capC,{x:655,y:PY0-6,op:1});capC.fill=COL.cf;
+  capA.set("↔ pares de escore semelhante");show(capA,{x:655,y:388,op:1});capA.fill=COL.muted;
+},
+// 6 — compare outcomes on matched pairs (ATT) + unobservable fog
+()=>{
+  const xc=560,xt=800;
+  const paired=new Set();
+  matchedPairs().forEach(({t,c})=>{paired.add(t);paired.add(c);});
+  const visibleSchools=schools.filter(s=>paired.has(s));
+  const meanT=visibleSchools.filter(s=>s.T).reduce((sum,s)=>sum+s.ab*100,0)/visibleSchools.filter(s=>s.T).length;
+  const meanC=visibleSchools.filter(s=>!s.T).reduce((sum,s)=>sum+s.ab*100,0)/visibleSchools.filter(s=>!s.T).length;
+  schools.forEach(s=>{
+    const visible=paired.has(s);
+    const centered=s.ab*100-(s.T?meanT:meanC)+(s.T?aT0:aC0);
+    show(s.o,{x:(s.T?xt:xc)+s.jx*0.5,y:yD(centered),r:9,op:visible?1:0});
+  });
+  show(axisY,{x1:PX0,y1:PY0,x2:PX0,y2:PY1,op:1});
+  show(axisX,{x1:PX0,y1:PY1,x2:PX1,y2:PY1,op:1});
+  yLabel.set("taxa de abandono (%)");show(yLabel,{x:Y_LABEL_X,y:Y_LABEL_Y,op:1});
+  capA.set("controle pareado");show(capA,{x:xc,y:PY1+22,op:1});capA.fill=COL.muted;
+  capB.set("tratamento (EMTI)");show(capB,{x:xt,y:PY1+22,op:1});capB.fill=COL.treat;
+  capC.set("diferença média nos pares  =  efeito estimado (ATT)");
+  show(capC,{x:680,y:PY0-6,op:1});capC.fill=COL.cf;
+},
+// 7 — bring in time axis; clouds collapse to two means
+()=>{
+  schools.forEach(s=>{const mx=s.T?xAnte:xAnte;const my=s.T?yD(aT0):yD(aC0);
+    show(s.o,{x:mx+s.jx*0.4,y:my+s.jy*0.4,r:5,op:.14});});
+  show(axisX,{x1:PX0,y1:PY1,x2:PX1,y2:PY1,op:1});
+  show(axisY,{x1:PX0,y1:PY0,x2:PX0,y2:PY1,op:1});
+  show(mC0,{x:xAnte,y:yD(aC0),r:12,op:1});
+  show(mT0,{x:xAnte,y:yD(aT0),r:12,op:1});
+  yLabel.set("taxa de abandono (%)");show(yLabel,{x:Y_LABEL_X,y:Y_LABEL_Y,op:1});
+  xLabel.set("tempo");show(xLabel,{x:(xAnte+xPost)/2,y:PY1+34,op:1});
+  capA.set("antes");show(capA,{x:xAnte,y:PY1+20,op:1});capA.fill=COL.muted;
+  capC.set("cada grupo vira UMA média; agora observamos a mudança no tempo");
+  show(capC,{x:660,y:PY0-6,op:1});capC.fill=COL.cf;
+},
+// 8 — four points, two differences
+()=>{
+  placeDiD(false,false);
+  capC.set("primeira diferença: variação de cada grupo (antes → depois)");
+  show(capC,{x:660,y:PY0-6,op:1});capC.fill=COL.cf;
+},
+// 9 — why one comparison is not enough (two naive gaps)
+()=>{
+  baseDiD();
+  topMsg.set("o DiD compara as DUAS diferenças — não uma só");
+  show(topMsg,{x:655,y:PY0-8,op:1});topMsg.fill=COL.cf;
+  gap0.color="#8a8f96";gap0.width=2.4;gap0.dash="5 4";
+  show(gap0,{x1:xAnte,y1:yD(aC0),x2:xAnte,y2:yD(aT0),op:1});
+  gap1.color=COL.cf;gap1.width=2.4;gap1.dash="5 4";
+  show(gap1,{x1:xPost,y1:yD(aC1),x2:xPost,y2:yD(aT1),op:1});
+  ann[0].set("gap inicial (seleção)");show(ann[0],{x:xAnte,y:yD(aT0)-22,op:1});ann[0].fill=COL.muted;
+  ann[1].set("gap final = efeito + seleção + tempo");show(ann[1],{x:xPost,y:yD(aT1)-22,op:1});ann[1].fill=COL.cf;
+},
+// 10 — parallel trends: build the counterfactual
+()=>{
+  baseDiD();
+  topMsg.set("pressuposto-chave: tendências paralelas");
+  show(topMsg,{x:655,y:PY0-8,op:1});topMsg.fill=COL.cf;
+  show(mCF,{x:xPost,y:yD(aT0+slopeC),r:11,op:1});
+  show(lnCF,{x1:xAnte,y1:yD(aT0),x2:xPost,y2:yD(aT0+slopeC),op:1});
+  ann[0].set("contrafactual: EMTI seguindo a tendência do controle");
+  show(ann[0],{x:(xAnte+xPost)/2,y:yD(aT0+slopeC)+26,op:1});ann[0].fill=COL.cf;
+},
+// 11 — the double difference = effect (with 2x2 table)
+()=>{
+  baseDiD();
+  show(mCF,{x:xPost,y:yD(aT0+slopeC),r:11,op:1});
+  show(lnCF,{x1:xAnte,y1:yD(aT0),x2:xPost,y2:yD(aT0+slopeC),op:1});
+  show(brk,{x1:xPost+26,y1:yD(aT1),x2:xPost+26,y2:yD(aT0+slopeC),op:1});
+  topMsg.set("efeito = observado − contrafactual = dupla diferença");
+  show(topMsg,{x:655,y:PY0-8,op:1});topMsg.fill=COL.cf;
+  ann[0].set("+1,5 p.p.");show(ann[0],{x:xPost+52,y:(yD(aT1)+yD(aT0+slopeC))/2,op:1});ann[0].fill=COL.cf;
+},
+// 12 — staggered adoption (adoção escalonada)
+()=>{
+  const y0=[300,375,450],adopt=[2017,2018,2020],name=["Coorte 2017","Coorte 2018","Coorte 2020"];
+  const cal=y=>sx(y,2015,2023);
+  show(axisX,{x1:PX0,y1:PY1,x2:PX1,y2:PY1,op:1});
+  for(let i=0;i<3;i++){
+    show(stagPre[i],{x1:cal(2015),y1:y0[i],x2:cal(adopt[i]),y2:y0[i],op:1});
+    show(stagPost[i],{x1:cal(adopt[i]),y1:y0[i],x2:cal(2023),y2:y0[i],op:1});
+    show(stagDot[i],{x:cal(adopt[i]),y:y0[i],r:8,op:1});
+    lblCoh[i].set(name[i]);show(lblCoh[i],{x:cal(2015)-12,y:y0[i],op:1});lblCoh[i].fill=COL.ink;
+    dotLbl[i].set(""+adopt[i]);show(dotLbl[i],{x:cal(adopt[i]),y:y0[i]-16,op:1});dotLbl[i].fill=COL.cf;
+  }
+  xLabel.set("linha do tempo (ano de calendário)");show(xLabel,{x:(PX0+PX1)/2,y:PY1+30,op:1});
+  topMsg.set("adoção escalonada: cada coorte adere num ano diferente");
+  show(topMsg,{x:655,y:PY0-8,op:1});topMsg.fill=COL.cf;
+  ann[0].set("cinza = antes do EMTI      azul = já com EMTI");
+  show(ann[0],{x:655,y:PY1-24,op:1});ann[0].fill=COL.muted;
+},
+// 13 — how each event-study point is assembled
+()=>{
+  const y0=[295,375,455],adopt=[2017,2018,2020],name=["Coorte 2017","Coorte 2018","Coorte 2020"];
+  const cal=y=>sx(y,2015,2023),h=1;
+  show(axisX,{x1:PX0,y1:PY1,x2:PX1,y2:PY1,op:1});
+  for(let i=0;i<3;i++){
+    const obs=adopt[i]+h,x=cal(obs);
+    show(stagPre[i],{x1:cal(2015),y1:y0[i],x2:cal(adopt[i]),y2:y0[i],op:.28});
+    show(stagPost[i],{x1:cal(adopt[i]),y1:y0[i],x2:cal(2023),y2:y0[i],op:.42});
+    show(stagDot[i],{x:cal(adopt[i]),y:y0[i],r:6,op:.55});
+    show(bridgeGuides[i],{x1:x,y1:PY0+26,x2:x,y2:PY1-22,op:.55});
+    show(bridgeTreatDots[i],{x:x,y:y0[i]-7,r:9,op:1});
+    show(bridgeCtrlDots[i],{x:x,y:y0[i]+28,r:7,op:1});
+    show(bridgeLinks[i],{x1:x,y1:y0[i]+4,x2:x,y2:y0[i]+21,op:.85});
+    lblCoh[i].set(name[i]);show(lblCoh[i],{x:cal(2015)-12,y:y0[i],op:1});lblCoh[i].fill=COL.ink;
+    dotLbl[i].set("+"+h+" ano");show(dotLbl[i],{x:x,y:y0[i]-28,op:1});dotLbl[i].fill=COL.cf;
+  }
+  xLabel.set("ano de calendário usado dentro de cada comparação");
+  show(xLabel,{x:(PX0+PX1)/2,y:PY1+30,op:1});
+  topMsg.set("um ponto do gráfico seguinte junta comparações equivalentes");
+  show(topMsg,{x:655,y:PY0-8,op:1});topMsg.fill=COL.cf;
+  ann[0].set("azul: coorte observada no mesmo tempo desde a adesão");
+  show(ann[0],{x:705,y:520,op:1});ann[0].fill=COL.treat;
+  ann[1].set("cinza: comparação com escolas ainda sem EMTI naquele ano");
+  show(ann[1],{x:708,y:545,op:1});ann[1].fill=COL.muted;
+  ann[2].set("repete-se para +2, +3... e os efeitos são alinhados por exposição");
+  show(ann[2],{x:705,y:570,op:1});ann[2].fill=COL.cf;
+},
+// 14 — event study: effect by exposure horizon
+()=>{
+  const y0=(PY0+PY1)/2,scaleY=26;
+  show(axisX,{x1:PX0,y1:PY1,x2:PX1,y2:PY1,op:.35});
+  show(axisY,{x1:PX0,y1:PY0,x2:PX0,y2:PY1,op:1});
+  refLine.color="#bdbbb4";refLine.dash="5 5";
+  show(refLine,{x1:PX0,y1:y0,x2:PX1,y2:y0,op:1});
+  const eff=[-3.2,-2.4,-1.6,-0.8,-0.2],ci=[1.5,1.3,1.2,1.2,1.4];
+  for(let i=0;i<5;i++){const x=470+i*145,y=y0-eff[i]*scaleY;
+    show(evPts[i],{x:x,y:y,r:8,op:1});
+    show(evBars[i],{x1:x,y1:y-ci[i]*scaleY,x2:x,y2:y+ci[i]*scaleY,op:.9});
+    yrLbl[i].set(""+(i+1));show(yrLbl[i],{x:x,y:PY1+16,op:1});yrLbl[i].fill=COL.muted;}
+  xLabel.set("anos desde a adesão ao EMTI");show(xLabel,{x:(470+1050)/2,y:PY1+38,op:1});
+  yLabel.set("efeito estimado no abandono (p.p.)");show(yLabel,{x:Y_LABEL_X,y:Y_LABEL_Y,op:1});
+  topMsg.set("cada ponto = uma estimativa de DiD por horizonte de exposição");
+  show(topMsg,{x:655,y:PY0-8,op:1});topMsg.fill=COL.cf;
+  ann[0].set("faixa cruza o zero → efeito não distinguível");
+  show(ann[0],{x:905,y:y0-72,op:1});ann[0].fill=COL.muted;
+  ann[1].set("efeito zero");show(ann[1],{x:PX1-46,y:y0-10,op:1});ann[1].fill="#9aa3ab";
+},
+// 15 — synthesis: PSM + DiD complementary
+()=>{
+  // divider
+  show(refLine,{x1:655,y1:PY0-10,x2:655,y2:PY1+10,op:.5});refLine.dash="4 6";
+  // left: PSM mini (matched pairs — control on left column, treatment on right)
+  const ctl=schools.filter(s=>!s.T).slice(0,5);
+  const trt=schools.filter(s=>s.T).slice(0,5);
+  ctl.forEach((s,i)=>show(s.o,{x:360,y:300+i*46,r:8,op:1}));
+  trt.forEach((s,i)=>show(s.o,{x:430,y:300+i*46,r:8,op:1}));
+  for(let i=0;i<5;i++){show(matchLines[i],{x1:360+8,y1:300+i*46,x2:430-8,y2:300+i*46,op:.8});
+    matchLines[i].color="#b7b3a8";matchLines[i].width=1.4;}
+  capA.set("PSM — equilibra o OBSERVÁVEL (num instante)");
+  show(capA,{x:415,y:250,op:1});capA.fill=COL.treat;
+  // right: DiD mini
+  const rx0=760,rx1=960;
+  show(mC0,{x:rx0,y:yD(aC0),r:9,op:1});show(mC1,{x:rx1,y:yD(aC1),r:9,op:1});
+  show(mT0,{x:rx0,y:yD(aT0),r:9,op:1});show(mT1,{x:rx1,y:yD(aT1),r:9,op:1});
+  show(mCF,{x:rx1,y:yD(T1cf()),r:9,op:1});
+  show(lnC,{x1:rx0,y1:yD(aC0),x2:rx1,y2:yD(aC1),op:1});
+  show(lnT,{x1:rx0,y1:yD(aT0),x2:rx1,y2:yD(aT1),op:1});
+  show(lnCF,{x1:rx0,y1:yD(aT0),x2:rx1,y2:yD(T1cf()),op:1});
+  show(brk,{x1:rx1+22,y1:yD(aT1),x2:rx1+22,y2:yD(T1cf()),op:1});
+  capB.set("DiD — remove o NÃO OBSERVÁVEL fixo (ao longo do tempo)");
+  show(capB,{x:860,y:250,op:1});capB.fill=COL.treat;
+  capD.set("aplicados nas duas unidades:  escola  •  aluno");
+  show(capD,{x:655,y:PY1+18,op:1});capD.fill=COL.muted;
+}
+];
+
+/* ---------- chrome / meta ---------- */
+const META=[
+ ["Avaliando o impacto do EMTI",
+  "Como o Pareamento por Escore de Propensão (PSM) e as Diferenças em Diferenças (DiD) estimam um efeito que não pode ser observado diretamente.",
+  "O <b>impacto</b> de um programa é o resultado observado menos o <span class='term'>contrafactual</span> — o que teria acontecido sem ele. O contrafactual nunca é observado; todo método é uma forma de estimá-lo."],
+ ["O problema: comparação ingênua",
+  "Comparar direto a média das escolas EMTI com as demais confunde o efeito do programa com diferenças que já existiam.",
+  "<span class='term'>Viés de seleção</span>: escolas que aderiram ao EMTI tendem a ter NSE diferente antes do programa. A diferença bruta mistura <b>efeito</b> e <b>diferenças prévias</b>."],
+ ["Escolas como vetores de características",
+  "Cada escola é descrita por covariáveis observáveis: NSE, sexo, raça/cor, complexidade da gestão e adequação docente.",
+  "As <span class='term'>covariáveis</span> são o que conseguimos medir. O PSM vai usá-las para tornar tratamento e controle comparáveis."],
+ ["A ideia do PSM: encontrar um gêmeo",
+  "Para cada escola EMTI, buscamos uma escola de controle com características semelhantes.",
+  "<span class='term'>Pareamento</span>: comparar cada tratada com um controle parecido remove, naquele par, a diferença de covariáveis observáveis."],
+ ["Muitas dimensões viram um número",
+  "É inviável casar escolas em 5 dimensões ao mesmo tempo. Resumimos tudo na probabilidade de ser EMTI.",
+  "O <span class='term'>escore de propensão</span> = P(EMTI | características), estimado por logit/probit. Escolas com escore igual têm distribuição de covariáveis semelhante (balanceamento)."],
+ ["Pareamento no escore e suporte comum",
+  "Casamos cada tratada com o controle de escore mais próximo. Onde não há contraparte, não há comparação válida.",
+  "<span class='term'>Suporte comum</span>: só estimamos onde coexistem tratados e controles. Fora dele, o contrafactual não é crível — foi a restrição enfrentada na base por aluno."],
+ ["Comparar o desfecho nos pares",
+  "Com os grupos equilibrados, comparamos o desfecho — aqui, a taxa de abandono (também vale para a proficiência no Proeb).",
+  "A diferença média nos pares é o <span class='term'>ATT</span>. Mas o PSM equilibra apenas o observável — a <b>névoa</b> de variáveis não medidas continua fora do controle."],
+ ["Usar o tempo para ir além do observável",
+  "Se o problema é o que não medimos, olhamos como cada grupo MUDA no tempo, não seu nível absoluto.",
+  "Cada grupo colapsa em uma <b>média</b>. A <span class='term'>primeira diferença</span> (antes→depois) cancela tudo que é fixo naquele grupo — inclusive o não observável constante."],
+ ["Dois grupos, dois períodos",
+  "Quatro pontos: controle e tratamento, antes e depois. Cada reta é a trajetória de um grupo.",
+  "A diferença dentro do mesmo grupo remove características fixas. Falta combinar as duas diferenças."],
+ ["Uma diferença só não basta",
+  "Comparar apenas 'antes e depois', ou apenas 'tratado e controle', embute um viés em cada caso.",
+  "O gap <b>antes</b> revela que os grupos já diferiam (<span class='term'>seleção</span>). O gap <b>depois</b> mistura efeito, seleção e choques do tempo (ex.: pandemia). O DiD combina as duas diferenças para separar o que é efeito."],
+ ["Tendências paralelas e o contrafactual",
+  "Usamos a variação do grupo de controle para imaginar o que teria acontecido com as EMTI sem o programa.",
+  "<span class='term'>Tendências paralelas</span> é o pressuposto-chave: sem o EMTI, as tratadas mudariam no mesmo ritmo do controle. Transporta-se a inclinação do controle a partir do ponto 'antes' das tratadas → o <b>contrafactual</b> (âmbar). Justificativa usual: trajetórias parecidas ANTES do programa."],
+ ["A dupla diferença é o efeito",
+  "O efeito é a distância entre o abandono observado nas EMTI e o contrafactual.",
+  "<span class='term'>DiD</span> = (Δ EMTI) − (Δ controle) = (+4,5) − (+3,0) = <b>+1,5 p.p.</b> Equivale ao coeficiente da interação <b>tratado × pós</b> num modelo com efeitos fixos de grupo e de tempo (TWFE)."],
+ ["Adoção escalonada",
+  "Na prática, as escolas não aderiram todas no mesmo ano — e, dentro de cada escola, o integral avança série a série.",
+  "<span class='term'>Adoção escalonada</span>: coortes entram em 2017, 2018, 2020… Cada coorte tem seu próprio 'antes' (cinza) e 'depois' (azul) e funciona como um DiD. Com muitas coortes, combinam-se todas para estimar o efeito e sua evolução."],
+ ["Como nasce cada ponto",
+  "Para um mesmo horizonte de exposição, juntamos observações comparáveis de várias coortes.",
+  "Exemplo: o ponto de <b>+1 ano</b> reúne coortes observadas um ano após aderirem. Cada observação tratada é comparada com escolas ainda sem EMTI naquele mesmo ano de calendário; depois repetimos a lógica para +2, +3 e assim por diante."],
+ ["Efeito por tempo de exposição (event study)",
+  "Alinhamos cada coorte pelo seu ano de adesão e estimamos um efeito para cada horizonte de exposição.",
+  "Cada ponto é uma estimativa de <span class='term'>DiD</span> para 'X anos de programa', ante escolas ainda sem EMTI. A <b>faixa</b> é o intervalo de confiança: quando cruza o zero, o efeito não é distinguível. (Sob adoção escalonada, o TWFE simples pode viesar — daí estimadores modernos.)"],
+ ["Dois métodos complementares",
+  "PSM e DiD cobrem fraquezas um do outro — e foram aplicados nas duas unidades: escola e aluno.",
+  "PSM torna os grupos comparáveis nas variáveis <b>medidas</b>; DiD limpa diferenças fixas <b>não medidas</b> usando a variação temporal. Juntos, dão a leitura mais robusta do impacto."]
+];
+
+let cur=0;const total=layouts.length;
+const elTitle=document.getElementById("title"),elSub=document.getElementById("subtitle"),
+      elNote=document.getElementById("note"),elCount=document.getElementById("counter"),
+      fog=document.getElementById("fog"),
+      legend=document.getElementById("legend"),
+      lgCF=document.getElementById("lgCF"),ditab=document.getElementById("ditab");
+
+function chrome(i){
+  elTitle.textContent=META[i][0];
+  elSub.innerHTML=META[i][1];
+  elNote.innerHTML=META[i][2];
+  elCount.textContent=(i+1)+" / "+total;
+  ditab.classList.toggle("on", i===11);       // 2x2 table on the double-difference slide
+  fog.classList.toggle("on", i===6);
+  // legend: keep treatment/control visible through the first DiD transition.
+  const hasDots=(i>=1&&i<=11)||i===15;
+  const axisSide=(i>=7&&i<=11);
+  const hasCF=(i>=10&&i<=11)||i===15;
+  legend.classList.toggle("on", hasDots);
+  legend.classList.toggle("axis-side", axisSide);
+  lgCF.style.display=hasCF?"":"none";
+}
+
+async function goTo(i){
+  if(i<0||i>=total)return;
+  cur=i;animGen++;const gen=animGen;
+  hideAll();layouts[i]();
+  chrome(i);
+  await commit(720,gen);
+}
+
+/* nav */
+document.getElementById("next").onclick=()=>goTo(cur+1);
+document.getElementById("prev").onclick=()=>goTo(cur-1);
+document.addEventListener("keydown",e=>{
+  if(e.key==="ArrowRight"||e.key===" "){e.preventDefault();goTo(cur+1);}
+  else if(e.key==="ArrowLeft"){e.preventDefault();goTo(cur-1);}
+});
+/* init */
+ALL.forEach(o=>o.render());
+goTo(0);
+</script>
+</body>
+</html>
