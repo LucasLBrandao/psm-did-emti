@@ -119,7 +119,7 @@ const COL={treat:"#2f6f7e",ctrl:"#9aa3ab",cf:"#d98a2b",axis:"#cfcdc6",ink:"#2b2b
 
 /* ---------- plot geometry ---------- */
 const PX0=250,PX1=1060,PY0=175,PY1=585;
-const xAnte=350,xPost=560,x2019=770,x2020=980;
+const xAnte=430,xPost=800;
 const yD=v=>PY1-(v/16)*(PY1-PY0);           // DiD abandono domain 0..16 (%)
 const sx=(v,a,b)=>PX0+((v-a)/(b-a))*(PX1-PX0);
 const sy=(v,a,b)=>PY1-((v-a)/(b-a))*(PY1-PY0);
@@ -216,13 +216,10 @@ const foldAxis=(function(){
 })();
 
 /* DiD markers + trend lines */
-const mC0=mkCircle(),mC1=mkCircle(),mC2=mkCircle(),mC3=mkCircle(),
-      mT0=mkCircle(),mT1=mkCircle(),mT2=mkCircle(),mT3=mkCircle(),mCF=mkCircle();
-mC0.color=mC1.color=mC2.color=mC3.color=COL.ctrl;
-mT0.color=mT1.color=mT2.color=mT3.color=COL.treat;mCF.color=COL.cf;
-const lnC=mkLine(),lnC2=mkLine(),lnC3=mkLine(),lnT=mkLine(),lnT2=mkLine(),lnT3=mkLine(),lnCF=mkLine(),brk=mkLine();
-lnC.color=lnC2.color=lnC3.color=COL.ctrl;lnC.width=lnC2.width=lnC3.width=2.2;
-lnT.color=lnT2.color=lnT3.color=COL.treat;lnT.width=lnT2.width=lnT3.width=2.2;
+const mC0=mkCircle(),mC1=mkCircle(),mT0=mkCircle(),mT1=mkCircle(),mCF=mkCircle();
+mC0.color=mC1.color=COL.ctrl;mT0.color=mT1.color=COL.treat;mCF.color=COL.cf;
+const lnC=mkLine(),lnT=mkLine(),lnCF=mkLine(),brk=mkLine();
+lnC.color=COL.ctrl;lnC.width=2.2;lnT.color=COL.treat;lnT.width=2.2;
 lnCF.color=COL.cf;lnCF.width=2.2;lnCF.dash="7 5";brk.color=COL.cf;brk.width=2.4;
 
 /* event-study */
@@ -279,7 +276,6 @@ const topMsg=mkText(15,600,"middle");
 const lblT=mkText(13,700,"start"),lblC=mkText(13,700,"start");
 const ann=[mkText(13,500,"middle"),mkText(13,500,"middle"),mkText(13,500,"middle")];
 const yrLbl=[];for(let i=0;i<5;i++)yrLbl.push(mkText(12,500,"middle"));
-const didYearLbl=[];for(let i=0;i<4;i++)didYearLbl.push(mkText(12,500,"middle"));
 const gap0=mkLine(),gap1=mkLine();
 const stagPre=[],stagPost=[],stagDot=[],lblCoh=[],dotLbl=[];
 const bridgeTreatDots=[],bridgeCtrlDots=[],bridgeLinks=[],bridgeGuides=[];
@@ -310,8 +306,6 @@ function nearest(ps,pool){let best=null,bd=9;pool.forEach(p=>{const d=Math.abs(p
 const calYear=year=>sx(year,2017,LAST_YEAR);
 const eventX=h=>470+(h-1)*145;
 const eventEff=[-3.2,-2.4,-1.6,-0.8,-0.2],eventCI=[1.5,1.3,1.2,1.2,1.4];
-const didYears=[2017,2018,2019,2020],didX=[xAnte,xPost,x2019,x2020];
-const cVals=[6,9,10.2,12],tVals=[8,12.5,13.6,15.2];
 function horizonLabel(h){return h===1?"+1 ano":"+"+h;}
 function showCalendarAxis(label){
   show(axisX,{x1:calYear(2017),y1:PY1,x2:calYear(LAST_YEAR),y2:PY1,op:1});
@@ -344,40 +338,6 @@ function layoutEventGroups(){
   ann[0].set("cada grupo de cor vira uma estimativa média por horizonte");
   show(ann[0],{x:655,y:520,op:1});ann[0].fill=COL.muted;
 }
-function showDidYearLabels(){
-  didYears.forEach((year,i)=>{
-    didYearLbl[i].set(""+year);
-    show(didYearLbl[i],{x:didX[i],y:PY1+20,op:1});
-    didYearLbl[i].fill=COL.muted;
-  });
-  xLabel.set("ano");show(xLabel,{x:(xAnte+x2020)/2,y:PY1+42,op:1});
-}
-function showDidSeries(extraOp=1){
-  show(mC0,{x:xAnte,y:yD(cVals[0]),r:11,op:1});show(mT0,{x:xAnte,y:yD(tVals[0]),r:11,op:1});
-  show(mC1,{x:xPost,y:yD(cVals[1]),r:11,op:1});show(mT1,{x:xPost,y:yD(tVals[1]),r:11,op:1});
-  show(lnC,{x1:xAnte,y1:yD(cVals[0]),x2:xPost,y2:yD(cVals[1]),op:1});
-  show(lnT,{x1:xAnte,y1:yD(tVals[0]),x2:xPost,y2:yD(tVals[1]),op:1});
-  show(mC2,{x:x2019,y:yD(cVals[2]),r:9,op:extraOp});show(mT2,{x:x2019,y:yD(tVals[2]),r:9,op:extraOp});
-  show(mC3,{x:x2020,y:yD(cVals[3]),r:9,op:extraOp});show(mT3,{x:x2020,y:yD(tVals[3]),r:9,op:extraOp});
-  show(lnC2,{x1:xPost,y1:yD(cVals[1]),x2:x2019,y2:yD(cVals[2]),op:extraOp});
-  show(lnC3,{x1:x2019,y1:yD(cVals[2]),x2:x2020,y2:yD(cVals[3]),op:extraOp});
-  show(lnT2,{x1:xPost,y1:yD(tVals[1]),x2:x2019,y2:yD(tVals[2]),op:extraOp});
-  show(lnT3,{x1:x2019,y1:yD(tVals[2]),x2:x2020,y2:yD(tVals[3]),op:extraOp});
-}
-function layoutDidGrowthStart(){
-  show(axisX,{x1:PX0,y1:PY1,x2:PX1,y2:PY1,op:1});
-  show(axisY,{x1:PX0,y1:PY0,x2:PX0,y2:PY1,op:1});
-  show(mC0,{x:xAnte,y:yD(cVals[0]),r:12,op:1});
-  show(mT0,{x:xAnte,y:yD(tVals[0]),r:12,op:1});
-  show(mC1,{x:xAnte,y:yD(cVals[0]),r:7,op:.75});
-  show(mT1,{x:xAnte,y:yD(tVals[0]),r:7,op:.75});
-  show(lnC,{x1:xAnte,y1:yD(cVals[0]),x2:xAnte,y2:yD(cVals[0]),op:1});
-  show(lnT,{x1:xAnte,y1:yD(tVals[0]),x2:xAnte,y2:yD(tVals[0]),op:1});
-  yLabel.set("taxa de abandono (%)");show(yLabel,{x:Y_LABEL_X,y:Y_LABEL_Y,op:1});
-  showDidYearLabels();
-  topMsg.set("as retas crescem de 2017 até 2018");
-  show(topMsg,{x:655,y:PY0-8,op:1});topMsg.fill=COL.cf;
-}
 function matchedPairs(){
   const available=schools.filter(s=>!s.T);
   return schools
@@ -396,9 +356,16 @@ function T1cf(){return aT0+slopeC;}
 function placeDiD(withCF,withBrk){
   show(axisX,{x1:PX0,y1:PY1,x2:PX1,y2:PY1,op:1});
   show(axisY,{x1:PX0,y1:PY0,x2:PX0,y2:PY1,op:1});
-  showDidSeries(.72);
+  show(mC0,{x:xAnte,y:yD(aC0),r:11,op:1});
+  show(mT0,{x:xAnte,y:yD(aT0),r:11,op:1});
+  show(mC1,{x:xPost,y:yD(aC1),r:11,op:1});
+  show(mT1,{x:xPost,y:yD(aT1),r:11,op:1});
+  show(lnC,{x1:xAnte,y1:yD(aC0),x2:xPost,y2:yD(aC1),op:1});
+  show(lnT,{x1:xAnte,y1:yD(aT0),x2:xPost,y2:yD(aT1),op:1});
   yLabel.set("taxa de abandono (%)");show(yLabel,{x:Y_LABEL_X,y:Y_LABEL_Y,op:1});
-  showDidYearLabels();
+  xLabel.set("tempo");show(xLabel,{x:(xAnte+xPost)/2,y:PY1+34,op:1});
+  capA.set("antes");show(capA,{x:xAnte,y:PY1+20,op:1});
+  capB.set("depois");show(capB,{x:xPost,y:PY1+20,op:1});
   if(withCF){
     show(mCF,{x:xPost,y:yD(T1cf()),r:11,op:1});
     show(lnCF,{x1:xAnte,y1:yD(aT0),x2:xPost,y2:yD(T1cf()),op:1});
@@ -413,11 +380,16 @@ function placeDiD(withCF,withBrk){
 function baseDiD(){
   show(axisX,{x1:PX0,y1:PY1,x2:PX1,y2:PY1,op:1});
   show(axisY,{x1:PX0,y1:PY0,x2:PX0,y2:PY1,op:1});
-  showDidSeries(.72);
+  show(mC0,{x:xAnte,y:yD(aC0),r:11,op:1});show(mT0,{x:xAnte,y:yD(aT0),r:11,op:1});
+  show(mC1,{x:xPost,y:yD(aC1),r:11,op:1});show(mT1,{x:xPost,y:yD(aT1),r:11,op:1});
+  show(lnC,{x1:xAnte,y1:yD(aC0),x2:xPost,y2:yD(aC1),op:1});
+  show(lnT,{x1:xAnte,y1:yD(aT0),x2:xPost,y2:yD(aT1),op:1});
   yLabel.set("taxa de abandono (%)");show(yLabel,{x:Y_LABEL_X,y:Y_LABEL_Y,op:1});
-  showDidYearLabels();
-  lblC.set("controle");show(lblC,{x:x2020+16,y:yD(cVals[3]),op:1});lblC.fill=COL.muted;
-  lblT.set("EMTI");show(lblT,{x:x2020+16,y:yD(tVals[3]),op:1});lblT.fill=COL.treat;
+  xLabel.set("tempo");show(xLabel,{x:(xAnte+xPost)/2,y:PY1+34,op:1});
+  capA.set("antes");show(capA,{x:xAnte,y:PY1+20,op:1});capA.fill=COL.muted;
+  capB.set("depois");show(capB,{x:xPost,y:PY1+20,op:1});capB.fill=COL.muted;
+  lblC.set("controle");show(lblC,{x:xPost+16,y:yD(aC1),op:1});lblC.fill=COL.muted;
+  lblT.set("EMTI");show(lblT,{x:xPost+16,y:yD(aT1),op:1});lblT.fill=COL.treat;
 }
 /* ---------- slide layouts (0-indexed) ---------- */
 const layouts=[
@@ -526,14 +498,15 @@ const layouts=[
   show(mC0,{x:xAnte,y:yD(aC0),r:12,op:1});
   show(mT0,{x:xAnte,y:yD(aT0),r:12,op:1});
   yLabel.set("taxa de abandono (%)");show(yLabel,{x:Y_LABEL_X,y:Y_LABEL_Y,op:1});
-  showDidYearLabels();
+  xLabel.set("tempo");show(xLabel,{x:(xAnte+xPost)/2,y:PY1+34,op:1});
+  capA.set("antes");show(capA,{x:xAnte,y:PY1+20,op:1});capA.fill=COL.muted;
   capC.set("cada grupo vira UMA média; agora observamos a mudança no tempo");
   show(capC,{x:660,y:PY0-6,op:1});capC.fill=COL.cf;
 },
 // 8 — four points, two differences
 ()=>{
   placeDiD(false,false);
-  capC.set("trajetórias por ano: cada grupo muda ao longo do tempo");
+  capC.set("primeira diferença: variação de cada grupo (antes → depois)");
   show(capC,{x:660,y:PY0-6,op:1});capC.fill=COL.cf;
 },
 // 9 — why one comparison is not enough (two naive gaps)
@@ -546,7 +519,7 @@ const layouts=[
   gap1.color=COL.cf;gap1.width=2.4;gap1.dash="5 4";
   show(gap1,{x1:xPost,y1:yD(aC1),x2:xPost,y2:yD(aT1),op:1});
   ann[0].set("gap inicial (seleção)");show(ann[0],{x:xAnte,y:yD(aT0)-22,op:1});ann[0].fill=COL.muted;
-  ann[1].set("gap em 2018 = efeito + seleção + tempo");show(ann[1],{x:xPost,y:yD(aT1)-22,op:1});ann[1].fill=COL.cf;
+  ann[1].set("gap final = efeito + seleção + tempo");show(ann[1],{x:xPost,y:yD(aT1)-22,op:1});ann[1].fill=COL.cf;
 },
 // 10 — parallel trends: build the counterfactual
 ()=>{
@@ -693,13 +666,13 @@ const META=[
   "A diferença média nos pares é o <span class='term'>ATT</span>. Mas o PSM equilibra apenas o observável — a <b>névoa</b> de variáveis não medidas continua fora do controle."],
  ["Usar o tempo para ir além do observável",
   "Se o problema é o que não medimos, olhamos como cada grupo MUDA no tempo, não seu nível absoluto.",
-  "Cada grupo colapsa em uma <b>média</b>. A <span class='term'>primeira diferença</span> entre anos cancela tudo que é fixo naquele grupo — inclusive o não observável constante."],
- ["Dois grupos, vários anos",
-  "Controle e tratamento passam a ser acompanhados em série: 2017, 2018, 2019 e 2020.",
-  "A diferença dentro do mesmo grupo remove características fixas. Em séries mais longas, a comparação pode ser repetida ano a ano; aqui começamos pela mudança de 2017 para 2018."],
+  "Cada grupo colapsa em uma <b>média</b>. A <span class='term'>primeira diferença</span> (antes→depois) cancela tudo que é fixo naquele grupo — inclusive o não observável constante."],
+ ["Dois grupos, dois períodos",
+  "Quatro pontos: controle e tratamento, antes e depois. Cada reta é a trajetória de um grupo.",
+  "A diferença dentro do mesmo grupo remove características fixas. Falta combinar as duas diferenças."],
  ["Uma diferença só não basta",
   "Comparar apenas 'antes e depois', ou apenas 'tratado e controle', embute um viés em cada caso.",
-  "O gap em <b>2017</b> revela que os grupos já diferiam (<span class='term'>seleção</span>). O gap em <b>2018</b> mistura efeito, seleção e choques do tempo. O DiD combina as duas diferenças para separar o que é efeito."],
+  "O gap <b>antes</b> revela que os grupos já diferiam (<span class='term'>seleção</span>). O gap <b>depois</b> mistura efeito, seleção e choques do tempo (ex.: pandemia). O DiD combina as duas diferenças para separar o que é efeito."],
  ["Tendências paralelas e o contrafactual",
   "Usamos a variação do grupo de controle para imaginar o que teria acontecido com as EMTI sem o programa.",
   "<span class='term'>Tendências paralelas</span> é o pressuposto-chave: sem o EMTI, as tratadas mudariam no mesmo ritmo do controle. Transporta-se a inclinação do controle a partir do ponto 'antes' das tratadas → o <b>contrafactual</b> (âmbar). Justificativa usual: trajetórias parecidas ANTES do programa."],
@@ -747,12 +720,6 @@ async function goTo(i){
   if(i<0||i>=total)return;
   const prev=cur;
   cur=i;animGen++;const gen=animGen;
-  if(prev===7&&i===8){
-    hideAll();layoutDidGrowthStart();
-    chrome(i);
-    const ok=await commit(360,gen);
-    if(!ok)return;
-  }
   if(prev===13&&i===14){
     hideAll();layoutEventGroups();
     chrome(i);
